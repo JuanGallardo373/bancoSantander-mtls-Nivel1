@@ -27,10 +27,10 @@ type TransferRequest struct {
 
 // TransferResponse representa la respuesta de una transferencia
 type TransferResponse struct {
-	Status      string    `json:"status"`
-	TransferID  string    `json:"transfer_id"`
-	Message     string    `json:"message"`
-	Timestamp   time.Time `json:"timestamp"`
+	Status     string    `json:"status"`
+	TransferID string    `json:"transfer_id"`
+	Message    string    `json:"message"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // AnomalyLog registra anomalías detectadas en el handshake mTLS
@@ -47,6 +47,9 @@ var (
 	logFile           *os.File
 	logMutex          sync.Mutex
 	transferIDCounter int
+	totalHandshakes   int64
+	totalLatencyMs    int64
+	metricsMutex      sync.Mutex
 )
 
 func init() {
@@ -89,7 +92,7 @@ func transferHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Parsear el body de la solicitud
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -166,21 +169,29 @@ func (c *TLSHandshakeInterceptor) Read(b []byte) (int, error) {
 	if !c.handshakeDone {
 		// ⏱️ CAPTURA INICIAL
 		startHandshake := time.Now()
-		
 		err := c.Conn.Handshake()
 		c.handshakeDone = true
 
 		// ⏱️ CÁLCULO FINAL: Handshake finalizado (con éxito o error)
 		latency := time.Since(startHandshake).Milliseconds()
-		
+
+		if totalHandshakes%100 == 0 {
+			mediaActual := float64(totalLatencyMs) / float64(totalHandshakes)
+			log.Printf("\n📊 [MÉTRICAS] Handshakes evaluados: %d | Latencia Media Actual: %.2f ms\n", totalHandshakes, mediaActual)
+		}
+
 		if err != nil {
 			// CAPTURAMOS LA ANOMALÍA EXACTA PARA LA IA
 			clientIP := extractClientIP(c.Conn.RemoteAddr().String())
-            // 🔴 FILTRO DE CONTINGENCIA: Si el error es un reset por descarte del cliente, lo ignoramos de anomalies.jsonl
-            if strings.Contains(errStr, "connection reset by peer") || strings.Contains(errStr, "broken pipe") {
-                log.Printf("⚠️ Socket TCP cerrado abruptamente por el cliente de estrés (s_time) | IP: %s", clientIP)
-                return 0, err
-            }
+			// 🔴 FILTRO DE CONTINGENCIA: Si el error es un reset por descarte del cliente, lo ignoramos de anomalies.jsonl
+			if strings.Contains(errStr, "connection reset by peer") || strings.Contains(errStr, "broken pipe") {
+				metricsMutex.Lock()
+				totalHandshakes++
+				totalLatencyMs += latency
+				metricsMutex.Unlock()
+				//log.Printf("⚠️ Socket TCP cerrado abruptamente por el cliente de estrés (s_time) | IP: %s", clientIP)
+				return 0, err
+			}
 			anomaly := AnomalyLog{
 				EventType:      "MTLS_HANDSHAKE_FAILED",
 				ClientIP:       clientIP,
@@ -190,19 +201,23 @@ func (c *TLSHandshakeInterceptor) Read(b []byte) (int, error) {
 			}
 
 			logAnomaly(anomaly)
-            log.Printf("🔐 ❌ ERROR HANDSHAKE mTLS: %s | IP: %s | Tiempo de procesamiento kernel: %d ms", err.Error(), clientIP, latency)
-			// Retornamos el error al servidor HTTP para que cierre esta Goroutine,
-			// pero el servidor principal en :8443 sigue intacto.
+			//log.Printf("🔐 ❌ ERROR HANDSHAKE mTLS: %s | IP: %s | Tiempo de procesamiento kernel: %d ms", err.Error(), clientIP, latency)
+
 			return 0, err
 		}
+		metricsMutex.Lock()
+		totalHandshakes++
+		totalLatencyMs += latency
+		metricsMutex.Unlock()
 		// ESCENARIO EXITOSO: (Prueba 1 - Fintechs legítimas)
-		var clientName string
+		/*var clientName string
 		if len(c.Conn.ConnectionState().PeerCertificates) > 0 {
 			clientName = c.Conn.ConnectionState().PeerCertificates[0].Subject.CommonName
 		} else {
 			clientName = "unknown"
 		}
 		log.Printf("🔐 🟢 HANDSHAKE mTLS EXITOSO | Cliente: %s | Latencia de negociación: %d ms", clientName, latency)
+		*/
 	}
 	// Si el handshake fue exitoso (Mercado Pago / BBVA), lee los datos del body JSON normal
 	return c.Conn.Read(b)
