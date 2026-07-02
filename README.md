@@ -24,11 +24,7 @@ Este proyecto implementa:
    - Notificaciones de seguridad al administrador
    - Clasificación de riesgos
 
-## 🏗️ Estructura del Proyecto
-
-
 ## 🚀 Requisitos Previos
-
 ### Sistema
 - **Go** 1.19+
      sudo apt install golang-go
@@ -47,7 +43,21 @@ cd bancoSantander-mtls
 # Instalar y descargar modelo Ollama
 ollama pull llama3
 
-🚀 Cómo Usarlo:
+## Preparar entorno
+# Creacion y firma de Certificados 
+bash CABancoCentral/generate-ca.sh
+
+bash servidor-banco/generate-cert.sh
+bash cliente-mercadopago/generate-cert.sh
+bash cliente-bancobbva/generate-cert.sh
+
+#Firma de la CA
+bash CABancoCentral/firmarCertificados.sh
+
+#Certificado autofirmado de atacante
+bash cliente-atacante/generate-cert.sh
+
+## 🚀 Ejecución:
 Terminal 1 - Ollama:
 ollama serve
 
