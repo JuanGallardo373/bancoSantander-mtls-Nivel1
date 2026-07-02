@@ -1,0 +1,37 @@
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Certificates and keys (SECURITY)
+*/certs/*.pem
+CABancoCentral/private/*.pem
+CABancoCentral/*.pem
+!certs/README_CERTS.md
+
+#Certificates database and serial number
+CABancoCentral/index.txt*
+CABancoCentral/serial*
+
+# Logs
+logs/*.log
+logs/*.jsonl
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+*.pyc
