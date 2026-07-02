@@ -184,7 +184,7 @@ func (c *TLSHandshakeInterceptor) Read(b []byte) (int, error) {
 			// CAPTURAMOS LA ANOMALÍA EXACTA PARA LA IA
 			clientIP := extractClientIP(c.Conn.RemoteAddr().String())
 			// 🔴 FILTRO DE CONTINGENCIA: Si el error es un reset por descarte del cliente, lo ignoramos de anomalies.jsonl
-			if strings.Contains(errStr, "connection reset by peer") || strings.Contains(errStr, "broken pipe") {
+			if strings.Contains(err.Error(), "connection reset by peer") || strings.Contains(err.Error(), "broken pipe") {
 				metricsMutex.Lock()
 				totalHandshakes++
 				totalLatencyMs += latency
